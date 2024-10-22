@@ -1,13 +1,12 @@
 "use client"
 
 import { useCallback } from "react"
-import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 
 import { Profile } from "@/types/profile"
+import { getSupabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -33,12 +32,12 @@ const formSchema = z.object({
   company: z.string(),
 })
 
+const supabase = getSupabase()
+
 const SettingsClientPage: React.FC<SettingsClientPageProps> = ({
   profile,
   user,
 }) => {
-  const router = useRouter()
-  const supabase = createClientComponentClient()
   const { toast } = useToast()
   const { ...form } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -78,7 +77,7 @@ const SettingsClientPage: React.FC<SettingsClientPageProps> = ({
     <div className="flex max-w-xl flex-col items-start justify-start space-y-8">
       <div className="flex flex-col space-y-2">
         <p className="text-sm font-bold">Personal</p>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Update your personal settings
         </p>
       </div>

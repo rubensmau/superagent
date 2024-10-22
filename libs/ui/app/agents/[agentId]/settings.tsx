@@ -2,11 +2,13 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { LLMProvider } from "@/models/models"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 
 import { Agent } from "@/types/agent"
+import { LLM } from "@/types/llm"
 import { Profile } from "@/types/profile"
 import { siteConfig } from "@/config/site"
 import { Api } from "@/lib/api"
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { MultiSelect } from "@/components/ui/multi-select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -28,25 +31,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/components/ui/use-toast"
 
+import AddDatasource from "./add-datasource"
+import AddTool from "./add-tool"
 import Avatar from "./avatar"
 
 const formSchema = z.object({
-  name: z.string().nonempty({
-    message: "Name is required",
-  }),
-  description: z.string().nonempty({
-    message: "Description is required",
-  }),
+  description: z.string().min(1, { message: "Description is required" }),
+  initialMessage: z.string(),
   llms: z.string(),
   isActive: z.boolean().default(true),
-  llmModel: z.string().nonempty({
-    message: "Model is required",
-  }),
+  llmModel: z.string().nullable(),
   prompt: z.string(),
   tools: z.array(z.string()),
   datasources: z.array(z.string()),
@@ -65,6 +65,7 @@ interface Tool {
 
 interface SettingsProps {
   tools: Tool[]
+  configuredLLMs: LLM[]
   agent: Agent
   profile: Profile
   datasources: Datasource[]
@@ -73,18 +74,20 @@ interface SettingsProps {
 export default function Settings({
   agent,
   datasources,
+  configuredLLMs,
   tools,
   profile,
 }: SettingsProps) {
+  console.log("agent", agent)
   const api = new Api(profile.api_key)
   const router = useRouter()
   const { toast } = useToast()
   const { ...form } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: agent.name,
       description: agent.description,
-      llms: agent.llms?.[0].llm.provider,
+      initialMessage: agent.initialMessage || "",
+      llms: agent.llms?.[0]?.llm.provider,
       llmModel: agent.llmModel,
       isActive: true,
       prompt: agent.prompt,
@@ -94,6 +97,7 @@ export default function Settings({
     },
   })
   const avatar = form.watch("avatar")
+  const currLlmProvider = form.watch("llms") as keyof typeof LLMProvider
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const { tools, datasources } = values
 
@@ -101,7 +105,7 @@ export default function Settings({
       originalIds: string[],
       newIds: string[],
       createResource: (id: string) => Promise<void>,
-      deleteResource: (id: string) => Promise<void>
+      deleteResource?: (id: string) => Promise<void>
     ) => {
       const resourcesToCreate = newIds.filter((id) => !originalIds.includes(id))
       const resourcesToRemove = originalIds.filter((id) => !newIds.includes(id))
@@ -111,7 +115,9 @@ export default function Settings({
       }
 
       for (const resourceId of resourcesToRemove) {
-        await deleteResource(resourceId)
+        if (deleteResource) {
+          await deleteResource(resourceId)
+        }
       }
     }
 
@@ -136,6 +142,17 @@ export default function Settings({
         (datasourceId) => api.deleteAgentDatasource(agent.id, datasourceId)
       )
 
+      if (currLlmProvider !== agent.llms?.[0]?.llm.provider) {
+        const configuredLLM = configuredLLMs.find(
+          (llm) => llm.provider === currLlmProvider
+        )
+
+        if (configuredLLM) {
+          await api.deleteAgentLLM(agent.id, agent.llms?.[0]?.llm.id)
+          await api.createAgentLLM(agent.id, configuredLLM.id)
+        }
+      }
+
       toast({
         description: "Agent updated",
       })
@@ -156,11 +173,11 @@ export default function Settings({
   )
 
   return (
-    <div className="relative flex max-w-md flex-1 flex-col p-4">
+    <ScrollArea className="relative flex max-w-lg flex-1 grow px-4 py-2">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="w-full space-y-4"
+          className="w-full space-y-4 pb-20"
         >
           <Avatar
             accept=".jpg, .jpeg, .png"
@@ -169,25 +186,12 @@ export default function Settings({
           />
           <FormField
             control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="E.g My agent" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="description"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Textarea
+                  <Input
                     placeholder="E.g this agent is an expert at..."
                     {...field}
                   />
@@ -204,7 +208,7 @@ export default function Settings({
                 <FormLabel>Prompt</FormLabel>
                 <FormControl>
                   <Textarea
-                    className="h-[200px]"
+                    className="h-[100px]"
                     placeholder="E.g you are an ai assistant that..."
                     {...field}
                   />
@@ -213,75 +217,121 @@ export default function Settings({
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="initialMessage"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Intro message</FormLabel>
+                <FormControl>
+                  <Input placeholder="E.g Hi, how can I help you?" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <div className="flex flex-col space-y-2">
-            <FormLabel>Model</FormLabel>
-            <div className="flex justify-between space-x-2">
-              <FormField
-                control={form.control}
-                name="llms"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a provider" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem
-                          key={agent.llms[0].llm.provider}
-                          value={agent.llms[0].llm.provider}
-                        >
-                          {agent.llms[0].llm.provider}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="llmModel"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {siteConfig.llms
-                          .find((llm) => llm.id === "OPENAI")
-                          ?.options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.title}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormLabel>Language model</FormLabel>
+            {agent.llms.length > 0 ? (
+              <div className="flex justify-between space-x-2">
+                <FormField
+                  control={form.control}
+                  name="llms"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a provider" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {siteConfig.llms
+                            .filter(({ id }) =>
+                              configuredLLMs.some((llm) => llm.provider === id)
+                            )
+                            .map(({ id, name }) => (
+                              <SelectItem key={id} value={id}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="llmModel"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value || ""}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a model" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {siteConfig.llms
+                            .find((llm) => llm.id === currLlmProvider)
+                            ?.options.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.title}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col space-y-4 rounded-lg border border-red-500 p-4">
+                <p className="text-sm">Heads up!</p>
+                <p className="text-sm text-muted-foreground">
+                  You need to add an LLM to this agent for it work. This can be
+                  done through the SDK or API.
+                </p>
+              </div>
+            )}
           </div>
+
+          <Separator className="!my-8 flex items-center justify-center">
+            <span className="text-sm text-muted-foreground">
+              Tools & Datasources
+            </span>
+          </Separator>
+
           <FormField
             control={form.control}
             name="tools"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>APIs</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Tools</FormLabel>
+                  <AddTool
+                    profile={profile}
+                    agent={agent}
+                    onSuccess={() => {
+                      window.location.reload()
+                    }}
+                  />
+                </div>
+
                 <FormControl>
                   <MultiSelect
-                    placeholder="Select api..."
+                    placeholder="Select tool..."
                     data={tools.map((tool: any) => ({
                       value: tool.id,
                       label: tool.name,
@@ -304,7 +354,17 @@ export default function Settings({
             name="datasources"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Datasources</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Datasources</FormLabel>
+                  <AddDatasource
+                    profile={profile}
+                    agent={agent}
+                    llmProvider={currLlmProvider}
+                    onSuccess={() => {
+                      window.location.reload()
+                    }}
+                  />
+                </div>
                 <FormControl>
                   <MultiSelect
                     placeholder="Select datasource..."
@@ -327,7 +387,7 @@ export default function Settings({
               </FormItem>
             )}
           />
-          <div className="absolute inset-x-0 bottom-0 flex p-4">
+          <div className="absolute inset-x-0 bottom-2 left-5 right-5 flex py-4">
             <Button
               type="submit"
               size="sm"
@@ -344,6 +404,6 @@ export default function Settings({
         </form>
       </Form>
       <Toaster />
-    </div>
+    </ScrollArea>
   )
 }

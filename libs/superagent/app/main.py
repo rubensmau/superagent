@@ -2,6 +2,7 @@ import logging
 import time
 
 import colorlog
+from decouple import config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,8 +34,10 @@ logging.basicConfig(
 
 app = FastAPI(
     title="Superagent",
-    description="Build, manage and deploy LLM-powered Agents",
-    version="0.1.0",
+    docs_url="/",
+    description="🥷 Run AI-agents with an API",
+    version="0.2.39",
+    servers=[{"url": config("SUPERAGENT_API_URL")}],
 )
 
 app.add_middleware(

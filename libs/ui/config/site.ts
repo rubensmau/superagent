@@ -1,95 +1,106 @@
-import { GoWorkflow } from "react-icons/go"
-import { PiDatabase } from "react-icons/pi"
+import { LLMProvider, VectorDbProvider } from "@/models/models"
 import {
-  RxAvatar,
-  RxChatBubble,
-  RxDiscordLogo,
-  RxFileText,
-  RxGithubLogo,
-  RxGlobe,
-  RxRocket,
-} from "react-icons/rx"
+  TbBrandDiscord,
+  TbFileCode,
+  TbPlug,
+  TbRobot,
+  TbStack2,
+  TbTerminal2,
+  TbUserCircle,
+} from "react-icons/tb"
 
 export type SiteConfig = typeof siteConfig
+
+export type LLMForm = {
+  disabled: boolean
+  formDescription: string
+  provider: keyof typeof LLMProvider
+  name: string
+  metadata: {
+    key: string
+    type: "input" | "password" | "json" | "select"
+    label: string
+    helpText?: string
+    json?: Record<string, { type: string; description: string }>
+    options?: { value: string; title: string }[]
+  }[]
+}[]
 
 export const siteConfig = {
   name: "Superagent Cloud",
   description: "The agent framework for large language models",
+  paymentPlans: {
+    hobby: process.env.NEXT_PUBLIC_STRIPE_HOBBY_PLAN!,
+    pro: process.env.NEXT_PUBLIC_STRIPE_PRO_PLAN!,
+  },
   mainNav: [
+    {
+      title: "Workflows",
+      href: "/workflows",
+      icon: TbStack2,
+    },
     {
       title: "Agents",
       href: "/agents",
-      icon: RxRocket,
+      icon: TbRobot,
     },
     {
-      title: "workflows",
-      href: "/workflows",
-      icon: GoWorkflow,
+      title: "Logs",
+      href: "/logs",
+      icon: TbTerminal2,
     },
     {
-      title: "datasources",
-      href: "/datasources",
-      icon: PiDatabase,
-    },
-    {
-      title: "apis",
-      href: "/apis",
-      icon: RxGlobe,
-    },
-    {
-      title: "llms",
-      href: "/llms",
-      icon: RxChatBubble,
+      title: "Integrations",
+      href: "/integrations",
+      icon: TbPlug,
     },
   ],
   footerNav: [
     {
       title: "Discord",
       href: "https://discord.com/invite/mhmJUTjW4b",
-      icon: RxDiscordLogo,
-    },
-    {
-      title: "Github",
-      href: "https://github.com/homanp/superagent",
-      icon: RxGithubLogo,
+      icon: TbBrandDiscord,
     },
     {
       title: "Documentation",
       href: "https://docs.superagent.sh",
-      icon: RxFileText,
+      icon: TbFileCode,
     },
     {
       title: "Settings",
       href: "/settings",
-      icon: RxAvatar,
+      icon: TbUserCircle,
     },
   ],
   settingsNav: [
     {
+      id: "user",
       title: "User",
       href: "/settings",
     },
     {
-      title: "Api keys",
+      id: "apiKeys",
+      title: "API keys",
       href: "/settings/api-keys",
     },
     {
+      id: "appearance",
       title: "Appearance",
       href: "/settings/appearance",
     },
     {
+      id: "billing",
       title: "Billing",
       href: "/settings/billing",
-      disabled: true,
     },
   ],
+  defaultLLM: "GPT_3_5_TURBO_16K_0613",
   llms: [
     {
       id: "OPENAI",
       description:
-        "Power your agents with the latest models from OpenAI, powerful for calling external APIs and reasoning.",
+        "Power your assistants with the latest models from OpenAI, powerful for calling external APIs and reasoning.",
       name: "OpenAI",
-      logo: "/openai-logo.png",
       options: [
         {
           value: "GPT_3_5_TURBO_16K_0613",
@@ -100,26 +111,48 @@ export const siteConfig = {
           title: "gpt-3.5-turbo-0613",
         },
         {
-          value: "GPT_4_32K_0613",
-          title: "gpt-4-32k-0613",
+          value: "GPT_3_5_TURBO_1106",
+          title: "gpt-3.5-turbo-1106",
+        },
+        {
+          value: "GPT_3_5_TURBO_0125",
+          title: "gpt-3.5-turbo-0125",
         },
         {
           value: "GPT_4_0613",
           title: "gpt-4-0613",
         },
+        {
+          value: "GPT_4_1106_PREVIEW",
+          title: "gpt-4-1106-preview",
+        },
+        {
+          value: "GPT_4_TURBO_PREVIEW",
+          title: "gpt-4-turbo-preview",
+        },
+        {
+          value: "GPT_4_O",
+          title: "gpt-4o",
+        },
       ],
     },
     {
-      disabled: true,
-      id: "META",
+      disabled: false,
+      id: "AZURE_OPENAI",
       description:
-        "Use Meta's latest models such as Llama and Llama 2 to power your agents. An open source alternative to OpenAI.",
-      name: "Meta",
-      logo: "/meta-logo.png",
+        "Use Azure OpenAI to power your assistants with the latest OpenAI models.",
+      name: "Azure OpenAI",
+      options: [],
+    },
+    {
+      disabled: true,
+      id: "HUGGINGFACE",
+      description: "Use Open Source models on HuggingFace.",
+      name: "HuggingFace",
       options: [
         {
-          value: "LLAMA",
-          title: "Llama",
+          value: "MISTRAL_7B_INSTRUCT_V01",
+          title: "mistral-7b-instruct-v0.1",
         },
       ],
     },
@@ -144,6 +177,27 @@ export const siteConfig = {
     },
   ],
   toolTypes: [
+    {
+      value: "ALGOLIA",
+      title: "Algolia Index",
+      metadata: [
+        {
+          key: "index",
+          type: "input",
+          label: "Algolia Index",
+        },
+        {
+          key: "appId",
+          type: "input",
+          label: "Algolia App ID",
+        },
+        {
+          key: "apiKey",
+          type: "password",
+          label: "Algolia API Key",
+        },
+      ],
+    },
     {
       value: "BING_SEARCH",
       title: "Bing Search",
@@ -204,9 +258,90 @@ export const siteConfig = {
       ],
     },
     {
+      value: "SCRAPER",
+      title: "Web extractor",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Replicate API key",
+        },
+      ],
+    },
+    {
+      value: "ADVANCED_SCRAPER",
+      title: "Advanced Web extractor",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Replicate API key",
+        },
+      ],
+    },
+    {
+      value: "GOOGLE_SEARCH",
+      title: "Google search",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Google search api key",
+        },
+      ],
+    },
+    {
+      value: "HTTP",
+      title: "API Request",
+      metadata: [
+        {
+          key: "headers",
+          type: "json",
+          label: "Headers",
+        },
+      ],
+    },
+    {
       value: "PUBMED",
       title: "PubMed",
       metadata: [],
+    },
+    {
+      value: "CODE_EXECUTOR",
+      title: "Code interpreter (alpha)",
+      metadata: [],
+    },
+    {
+      value: "BROWSER",
+      title: "Browser",
+      metadata: [],
+    },
+    {
+      value: "HAND_OFF",
+      title: "Human hand-off (Alpha)",
+      metadata: [],
+    },
+    {
+      value: "FUNCTION",
+      title: "Function",
+      metadata: [
+        {
+          key: "functionName",
+          type: "input",
+          label: "Function name",
+          helpText: "Use lowercase letters, ex: get_article",
+        },
+        {
+          key: "args",
+          type: "json",
+          label: "Arguments",
+          helpText: "Add function arguments in the following format",
+          json: {
+            title: { type: "string", description: "Article title" },
+            url: { type: "string", description: "The url of the article" },
+          },
+        },
+      ],
     },
     {
       value: "OPENAPI",
@@ -221,6 +356,28 @@ export const siteConfig = {
           key: "headers",
           type: "json",
           label: "Additional headers",
+        },
+      ],
+    },
+    {
+      value: "GPT_VISION",
+      title: "GPT Vision",
+      metadata: [
+        {
+          key: "openaiApiKey",
+          type: "input",
+          label: "Your OpenAI API Key",
+        },
+      ],
+    },
+    {
+      value: "TTS_1",
+      title: "Text-To-Speech (TTS1)",
+      metadata: [
+        {
+          key: "openaiApiKey",
+          type: "input",
+          label: "Your OpenAI API Key",
         },
       ],
     },
@@ -264,6 +421,343 @@ export const siteConfig = {
           key: "apiKey",
           type: "input",
           label: "Superagent API key",
+        },
+      ],
+    },
+    {
+      value: "RESEARCH",
+      title: "Research",
+      metadata: [{ key: "apiKey", type: "input", label: "Tavily API key" }],
+    },
+    {
+      value: "SUPERRAG",
+      title: "SuperRag",
+      metadata: [
+        {
+          key: "vector_database.type",
+          type: "select",
+          options: [
+            { value: "pinecone", title: "Pinecone" },
+            { value: "qdrant", title: "Qdrant" },
+            { value: "weaviate", title: "Weaviate" },
+          ],
+          label: "Vector Database Provider",
+        },
+        {
+          key: "index_name",
+          type: "input",
+          label: "SuperRag Index Name",
+        },
+      ],
+    },
+    {
+      value: "SEC",
+      title: "SEC API",
+      metadata: [
+        {
+          key: "identity",
+          type: "input",
+          label: "Identity string",
+        },
+        {
+          key: "form",
+          type: "input",
+          label: "10-K, 10-Q, 8-K etc",
+        },
+      ],
+    },
+  ],
+  llmForm: [
+    {
+      disabled: false,
+      formDescription: "Please enter your OpenAI API key.",
+      provider: LLMProvider.OPENAI,
+      name: "OpenAI",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "OpenAI API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Perplexity API key.",
+      provider: LLMProvider.PERPLEXITY,
+      name: "Perplexity AI",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Perplexity API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Together API key.",
+      provider: LLMProvider.TOGETHER_AI,
+      name: "Together AI",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Together API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Anthropic API key.",
+      provider: LLMProvider.ANTHROPIC,
+      name: "Anthropic",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Anthropic API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Groq API key.",
+      provider: LLMProvider.GROQ,
+      name: "Groq",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Groq API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your AWS credentials.",
+      provider: LLMProvider.BEDROCK,
+      name: "Amazon Bedrock",
+      metadata: [
+        {
+          key: "options.aws_access_key_id",
+          type: "input",
+          label: "AWS Access Key",
+        },
+        {
+          key: "options.aws_secret_access_key",
+          type: "input",
+          label: "AWS Secret Access Key",
+        },
+        {
+          key: "options.aws_region_name",
+          type: "input",
+          label: "AWS Region",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Mistral API key.",
+      provider: LLMProvider.MISTRAL,
+      name: "Mistral",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Mistral API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Cohere API key.",
+      provider: LLMProvider.COHERE_CHAT,
+      name: "Cohere",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Cohere API Key",
+        },
+      ],
+    },
+    {
+      disabled: false,
+      formDescription: "Please enter your Azure OpenAI API key.",
+      provider: LLMProvider.AZURE_OPENAI,
+      name: "Azure OpenAI",
+      metadata: [
+        {
+          key: "apiKey",
+          type: "input",
+          label: "Azure API Key",
+        },
+        {
+          key: "options.azure_endpoint",
+          type: "input",
+          label: "Azure endpoint URL",
+        },
+        {
+          key: "options.openai_api_version",
+          type: "input",
+          label: "Azure API version",
+        },
+        {
+          key: "options.azure_deployment",
+          type: "input",
+          label: "Azure deployment name",
+        },
+      ],
+    },
+    // {
+    //   disabled: true,
+    //   formDescription: "Please enter your HF API key.",
+    //   provider: LLMProvider.HUGGINGFACE,
+    //   name: "Hugging Face",
+    //   metadata: [
+    //     {
+    //       key: "apiKey",
+    //       type: "input",
+    //       label: "HF API Key",
+    //     },
+    //   ],
+    // },
+  ] satisfies LLMForm,
+  vectorDbs: [
+    {
+      provider: VectorDbProvider[VectorDbProvider.PINECONE],
+      name: "Pinecone",
+      logo: "/pinecone.png",
+      description:
+        "Cloud-based database for storing and searching vectors, enabling fast similarity comparisons. Scales well for large datasets.",
+      formDescription: "Please enter your Pinecone credentials.",
+      metadata: [
+        {
+          key: "PINECONE_API_KEY",
+          type: "input",
+          label: "Pinecone API Key",
+        },
+        {
+          key: "PINECONE_ENVIRONMENT",
+          type: "input",
+          label: "Pinecone Environment",
+        },
+        {
+          key: "PINECONE_INDEX",
+          type: "input",
+          label: "Pinecone Index",
+        },
+      ],
+    },
+    {
+      provider: VectorDbProvider[VectorDbProvider.QDRANT],
+      name: "Qdrant",
+      logo: "/qdrant.png",
+      description:
+        "Open-source database optimized for efficient vector search and filtering. Handles large datasets effectively while requiring minimal resources.",
+      formDescription: "Please enter your Qdrant credentials.",
+      metadata: [
+        {
+          key: "QDRANT_API_KEY",
+          type: "input",
+          label: "Qdrant API Key",
+        },
+        {
+          key: "QDRANT_HOST",
+          type: "input",
+          label: "Qdrant Host",
+        },
+        {
+          key: "QDRANT_INDEX",
+          type: "input",
+          label: "Qdrant Index",
+        },
+      ],
+    },
+    {
+      provider: VectorDbProvider[VectorDbProvider.ASTRA_DB],
+      name: "Astra DB",
+      logo: "/datastax.jpeg",
+      description:
+        "Serverless database built on Cassandra, offering integration with Pinecone for vector similarity search.",
+      formDescription: "Please enter your Astra DB credentials",
+      metadata: [
+        {
+          key: "ASTRA_DB_ID",
+          type: "input",
+          label: "Astra DB ID",
+        },
+        {
+          key: "ASTRA_DB_REGION",
+          type: "input",
+          label: "Astra DB Region",
+        },
+        {
+          key: "ASTRA_DB_APPLICATION_TOKEN",
+          type: "input",
+          label: "Astra DB Application Token",
+        },
+        {
+          key: "ASTRA_DB_COLLECTION_NAME",
+          type: "input",
+          label: "Astra DB Collection Name",
+        },
+        {
+          key: "ASTRA_DB_KEYSPACE_NAME",
+          type: "input",
+          label: "Astra DB Keyspace Name",
+        },
+      ],
+    },
+    {
+      provider: VectorDbProvider[VectorDbProvider.WEAVIATE],
+      name: "Weaviate",
+      logo: "/weaviate.png",
+      description:
+        "Semantic vector database with schema-based organization. Supports both vector search and connections between data points like a graph.",
+      formDescription: "Please enter your Weaviate credentials.",
+      metadata: [
+        {
+          key: "WEAVIATE_API_KEY",
+          type: "input",
+          label: "Weaviate API Key",
+        },
+        {
+          key: "WEAVIATE_URL",
+          type: "input",
+          label: "Weaviate URL",
+        },
+        {
+          key: "WEAVIATE_INDEX",
+          type: "input",
+          label: "Weaviate Index",
+        },
+      ],
+    },
+    {
+      provider: VectorDbProvider[VectorDbProvider.SUPABASE],
+      name: "Supabase",
+      logo: "/supabase.png",
+      description:
+        "The PGVector extension is particularly useful for tasks such as vector similarity search, retrieval, generation, and clustering",
+      formDescription: "Please enter your Supabase PGVector credentials.",
+      metadata: [
+        {
+          key: "SUPABASE_DB_URL",
+          type: "input",
+          label: "Database Connection URI",
+          placeholder: "postgres://postgres:postgres@localhost:5432/postgres",
+          helpText:
+            "The connection URI for your database. You can find this in your Supabase dashboard.",
+        },
+        {
+          key: "SUPABASE_TABLE_NAME",
+          type: "input",
+          label: "Table Name",
+          placeholder: "my_collection",
+          helpText:
+            "The database table name which your vector embeddings will be stored in.",
         },
       ],
     },

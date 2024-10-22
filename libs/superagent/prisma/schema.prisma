@@ -6,21 +6,52 @@ generator client {
 datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
+  directUrl         = env("DATABASE_MIGRATION_URL")
   shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
+}
+
+enum AgentType {
+  SUPERAGENT
+  OPENAI_ASSISTANT
+  LLM
 }
 
 enum LLMProvider {
   OPENAI
+  AZURE_OPENAI
+  HUGGINGFACE
+  PERPLEXITY
+  TOGETHER_AI
+  ANTHROPIC
+  BEDROCK
+  GROQ
+  MISTRAL
+  COHERE_CHAT
 }
 
 enum LLMModel {
+  GPT_3_5_TURBO
   GPT_3_5_TURBO_16K_0613
   GPT_3_5_TURBO_0613
+  GPT_3_5_TURBO_1106
+  GPT_3_5_TURBO_0125
+
+  GPT_4
   GPT_4_0613
+  GPT_4_32K
   GPT_4_32K_0613
+  GPT_4_1106_PREVIEW
+  GPT_4_0125_PREVIEW
+  GPT_4_TURBO
+  GPT_4_TURBO_PREVIEW
+  GPT_4_TURBO_2024_04_09
+  GPT_4_0
+  MISTRAL_7B_INSTRUCT_V01
+  MIXTRAL_8X7B_INSTRUCT_V01
 }
 
 enum ToolType {
+  ALGOLIA
   BROWSER
   BING_SEARCH
   REPLICATE
@@ -31,12 +62,30 @@ enum ToolType {
   CHATGPT_PLUGIN
   METAPHOR
   PUBMED
+  CODE_EXECUTOR
+  OPENBB
+  GPT_VISION
+  TTS_1
+  HAND_OFF
+  FUNCTION
+  HTTP
+  SUPERRAG
+  RESEARCH
+  GITHUB
+  SCRAPER
+  ADVANCED_SCRAPER
+  GOOGLE_SEARCH
+  SEC
 }
 
 enum DatasourceType {
   TXT
   PDF
   CSV
+  PPTX
+  XLSX
+  DOCX
+  GOOGLE_DOC
   YOUTUBE
   GITHUB_REPOSITORY
   MARKDOWN
@@ -52,41 +101,71 @@ enum DatasourceType {
 enum DatasourceStatus {
   IN_PROGRESS
   DONE
+  FAILED
+}
+
+enum VectorDbProvider {
+  PINECONE
+  ASTRA_DB
+  WEAVIATE
+  QDRANT
+  SUPABASE
 }
 
 model ApiUser {
-  id          String       @id @default(uuid())
-  token       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  agents      Agent[]
-  llms        LLM[]
-  datasources Datasource[]
-  tools       Tool[]
-  worflows    Workflow[]
+  id              String           @id @default(uuid())
+  token           String?
+  email           String?          @db.Text
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  agents          Agent[]
+  llms            LLM[]
+  datasources     Datasource[]
+  tools           Tool[]
+  workflows       Workflow[]
+  vectorDb        VectorDb[]
+  workflowConfigs WorkflowConfig[]
+  apiKeys         ApiKey[]
+}
+
+model ApiKey {
+  id            String   @id @default(uuid())
+  name          String
+  displayApiKey String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  apiUserId     String
+  apiUser       ApiUser  @relation(fields: [apiUserId], references: [id])
+
+  @@index([apiUserId], name: "api_user_id")
 }
 
 model Agent {
-  id            String            @id @default(uuid())
-  name          String
-  avatar        String?
-  description   String            @default("Add a agent description...") @db.Text
-  isActive      Boolean           @default(false)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  llms          AgentLLM[]
-  llmModel      LLMModel          @default(GPT_3_5_TURBO_16K_0613)
-  prompt        String?
-  apiUserId     String
-  apiUser       ApiUser           @relation(fields: [apiUserId], references: [id])
-  datasources   AgentDatasource[]
-  tools         AgentTool[]
-  workflowSteps WorkflowStep[]
+  id             String            @id @default(uuid())
+  type           AgentType         @default(SUPERAGENT)
+  name           String
+  avatar         String?
+  initialMessage String?           @db.Text()
+  description    String            @default("Add a agent description...") @db.Text
+  isActive       Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  llms           AgentLLM[]
+  llmModel       LLMModel?         @default(GPT_3_5_TURBO_16K_0613)
+  prompt         String?
+  apiUserId      String
+  apiUser        ApiUser           @relation(fields: [apiUserId], references: [id])
+  datasources    AgentDatasource[]
+  tools          AgentTool[]
+  workflowSteps  WorkflowStep[]
+  metadata       Json?
+  outputSchema   String?
 }
 
 model Datasource {
   id          String            @id @default(uuid())
   name        String
+  content     String?           @db.Text()
   description String?
   url         String?
   type        DatasourceType
@@ -97,13 +176,15 @@ model Datasource {
   metadata    String?           @db.Text
   status      DatasourceStatus  @default(IN_PROGRESS)
   datasources AgentDatasource[]
+  vectorDb    VectorDb?         @relation(fields: [vectorDbId], references: [id])
+  vectorDbId  String?
 }
 
 model AgentDatasource {
   agentId      String
   datasourceId String
-  agent        Agent      @relation(fields: [agentId], references: [id])
-  datasource   Datasource @relation(fields: [datasourceId], references: [id])
+  agent        Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  datasource   Datasource @relation(fields: [datasourceId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -116,19 +197,20 @@ model Tool {
   description  String
   type         ToolType
   returnDirect Boolean     @default(false)
-  metadata     String      @db.Text
+  metadata     String?     @db.Text
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   apiUserId    String
   apiUser      ApiUser     @relation(fields: [apiUserId], references: [id])
   tools        AgentTool[]
+  toolConfig   Json?
 }
 
 model AgentTool {
   agentId   String
   toolId    String
-  agent     Agent    @relation(fields: [agentId], references: [id])
-  tool      Tool     @relation(fields: [toolId], references: [id])
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -150,7 +232,7 @@ model LLM {
 model AgentLLM {
   agentId   String
   llmId     String
-  agent     Agent    @relation(fields: [agentId], references: [id])
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   llm       LLM      @relation(fields: [llmId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -159,25 +241,48 @@ model AgentLLM {
 }
 
 model Workflow {
-  id          String         @id @default(uuid())
-  name        String
-  description String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  steps       WorkflowStep[]
-  apiUserId   String
-  apiUser     ApiUser        @relation(fields: [apiUserId], references: [id])
+  id              String           @id @default(uuid())
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  steps           WorkflowStep[]
+  apiUserId       String
+  apiUser         ApiUser          @relation(fields: [apiUserId], references: [id])
+  workflowConfigs WorkflowConfig[]
+}
+
+model WorkflowConfig {
+  id         String   @id @default(uuid())
+  config     Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  ApiUser    ApiUser? @relation(fields: [apiUserId], references: [id])
+  apiUserId  String?
 }
 
 model WorkflowStep {
   id         String   @id @default(uuid())
   order      Int
   workflowId String
-  workflow   Workflow @relation(fields: [workflowId], references: [id])
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  input      String   @db.Text
-  output     String   @db.Text
+  input      String?  @db.Text
+  output     String?  @db.Text
   agentId    String
-  agent      Agent    @relation(fields: [agentId], references: [id])
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+model VectorDb {
+  id          String           @id @default(uuid())
+  provider    VectorDbProvider @default(PINECONE)
+  options     Json
+  datasources Datasource[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  apiUserId   String
+  apiUser     ApiUser          @relation(fields: [apiUserId], references: [id])
 }

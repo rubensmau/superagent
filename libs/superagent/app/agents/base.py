@@ -1,149 +1,183 @@
-from typing import Any, List
+from abc import ABC, abstractmethod
+from functools import cached_property
+from typing import Any, List, Optional
 
-from decouple import config
-from langchain import LLMChain, PromptTemplate
-from langchain.agents import AgentType, initialize_agent
-from langchain.chat_models import ChatOpenAI
-from langchain.memory.motorhead_memory import MotorheadMemory
-from langchain.prompts import MessagesPlaceholder
-from langchain.schema import SystemMessage
-from slugify import slugify
+from langchain.agents import AgentExecutor
+from pydantic import BaseModel
 
-from app.datasource.types import (
-    VALID_UNSTRUCTURED_DATA_TYPES,
-)
-from app.models.tools import DatasourceInput
-from app.tools import TOOL_TYPE_MAPPING, create_tool
-from app.tools.datasource import DatasourceTool, StructuredDatasourceTool
-from app.utils.llm import LLM_MAPPING
-from app.utils.prisma import prisma
-from app.utils.streaming import CustomAsyncIteratorCallbackHandler
-from prisma.models import Agent, AgentDatasource, AgentLLM, AgentTool
-
-DEFAULT_PROMPT = (
-    "You are a helpful AI Assistant, anwer the users questions to "
-    "the best of your ability."
-)
+from app.models.request import LLMParams as LLMParamsRequest
+from app.utils.callbacks import CustomAsyncIteratorCallbackHandler
+from prisma.enums import AgentType, LLMProvider
+from prisma.models import LLM, Agent
 
 
-class AgentBase:
+class LLMParams(BaseModel):
+    temperature: Optional[float] = 0.1
+    max_tokens: Optional[int]
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    aws_region_name: Optional[str] = None
+
+
+class LLMData(BaseModel):
+    llm: LLM
+    params: LLMParams
+    model: str
+
+
+class AgentBase(ABC):
+    _input: str
+    _messages: list = []
+    prompt: Any
+    tools: Any
+    session_id: str
+    enable_streaming: bool
+    output_schema: str
+    callbacks: List[CustomAsyncIteratorCallbackHandler]
+    agent_data: Agent
+    llm_data: LLMData
+
     def __init__(
         self,
-        agent_id: str,
-        session_id: str = None,
+        session_id: str,
         enable_streaming: bool = False,
-        callback: CustomAsyncIteratorCallbackHandler = None,
+        output_schema: str = None,
+        callbacks: List[CustomAsyncIteratorCallbackHandler] = [],
+        llm_data: LLMData = None,
+        agent_data: Agent = None,
     ):
-        self.agent_id = agent_id
         self.session_id = session_id
         self.enable_streaming = enable_streaming
-        self.callback = callback
+        self.output_schema = output_schema
+        self.callbacks = callbacks
+        self.llm_data = llm_data
+        self.agent_data = agent_data
 
-    async def _get_tools(
-        self, agent_datasources: List[AgentDatasource], agent_tools: List[AgentTool]
-    ) -> List:
-        tools = []
-        for agent_datasource in agent_datasources:
-            tool_type = (
-                DatasourceTool
-                if agent_datasource.datasource.type in VALID_UNSTRUCTURED_DATA_TYPES
-                else StructuredDatasourceTool
-            )
-            metadata = (
-                {"datasource_id": agent_datasource.datasource.id, "query_type": "all"}
-                if tool_type == DatasourceTool
-                else {"datasource": agent_datasource.datasource}
-            )
-            tool = tool_type(
-                metadata=metadata,
-                args_schema=DatasourceInput,
-                name=slugify(agent_datasource.datasource.name),
-                description=agent_datasource.datasource.description,
-                return_direct=False,
-            )
-            tools.append(tool)
-        for agent_tool in agent_tools:
-            tool_info = TOOL_TYPE_MAPPING.get(agent_tool.tool.type)
-            if tool_info:
-                tool = create_tool(
-                    tool_class=tool_info["class"],
-                    name=slugify(agent_tool.tool.name),
-                    description=agent_tool.tool.description,
-                    metadata=agent_tool.tool.metadata,
-                    args_schema=tool_info["schema"],
-                    return_direct=agent_tool.tool.returnDirect,
-                )
-            tools.append(tool)
-        return tools
+    @property
+    def input(self):
+        return self._input
 
-    async def _get_llm(self, agent_llm: AgentLLM, model: str) -> Any:
-        if agent_llm.llm.provider == "OPENAI":
-            return ChatOpenAI(
-                model=LLM_MAPPING[model],
-                openai_api_key=agent_llm.llm.apiKey,
-                temperature=0,
-                streaming=self.enable_streaming,
-                callbacks=[self.callback] if self.enable_streaming else [],
-                **(agent_llm.llm.options if agent_llm.llm.options else {}),
-            )
+    @input.setter
+    def input(self, value: str):
+        self._input = value
 
-    async def _get_prompt(self, agent: Agent) -> SystemMessage:
-        return SystemMessage(content=agent.prompt or DEFAULT_PROMPT)
+    @property
+    def messages(self):
+        return self._messages
 
-    async def _get_memory(self) -> MotorheadMemory:
-        memory = MotorheadMemory(
-            session_id=f"{self.agent_id}-{self.session_id}",
-            memory_key="chat_history",
-            client_id=config("MOTORHEAD_CLIENT_ID"),
-            api_key=config("MOTORHEAD_API_KEY"),
-            return_messages=True,
-            output_key="output",
+    @messages.setter
+    def messages(self, value: list):
+        self._messages = value
+
+    @property
+    @abstractmethod
+    def prompt(self) -> Any:
+        ...
+
+    @property
+    @abstractmethod
+    def tools(self) -> Any:
+        ...
+
+    # TODO: Set a proper return type when we remove Langchain agent type
+    @cached_property
+    async def memory(self) -> Any:
+        ...
+
+    @abstractmethod
+    def get_agent(self) -> AgentExecutor:
+        ...
+
+
+class AgentFactory:
+    def __init__(
+        self,
+        session_id: str = None,
+        enable_streaming: bool = False,
+        output_schema: str = None,
+        callbacks: List[CustomAsyncIteratorCallbackHandler] = [],
+        llm_params: Optional[LLMParamsRequest] = {},
+        agent_data: Agent = None,
+    ):
+        self.session_id = session_id
+        self.enable_streaming = enable_streaming
+        self.output_schema = output_schema
+        self.callbacks = callbacks
+        self.api_llm_params = llm_params
+        self.agent_data = agent_data
+
+    @property
+    def llm_data(self):
+        llm = self.agent_data.llms[0].llm
+        params = self.api_llm_params.dict() if self.api_llm_params else {}
+
+        options = {
+            **(self.agent_data.metadata or {}),
+            **(llm.options or {}),
+            **(params),
+        }
+
+        params = LLMParams(
+            temperature=options.get("temperature"),
+            max_tokens=options.get("max_tokens"),
+            aws_access_key_id=(
+                options.get("aws_access_key_id")
+                if llm.provider == LLMProvider.BEDROCK
+                else None
+            ),
+            aws_secret_access_key=(
+                options.get("aws_secret_access_key")
+                if llm.provider == LLMProvider.BEDROCK
+                else None
+            ),
+            aws_region_name=(
+                options.get("aws_region_name")
+                if llm.provider == LLMProvider.BEDROCK
+                else None
+            ),
         )
-        await memory.init()
-        return memory
 
-    async def get_agent(self) -> Any:
-        config = await prisma.agent.find_unique_or_raise(
-            where={"id": self.agent_id},
-            include={
-                "llms": {"include": {"llm": True}},
-                "datasources": {"include": {"datasource": True}},
-                "tools": {"include": {"tool": True}},
-            },
+        return LLMData(
+            llm=llm,
+            params=LLMParams.parse_obj(options),
+            model=self.agent_data.llmModel or self.agent_data.metadata.get("model"),
         )
-        tools = await self._get_tools(
-            agent_datasources=config.datasources, agent_tools=config.tools
-        )
-        llm = await self._get_llm(agent_llm=config.llms[0], model=config.llmModel)
-        prompt = await self._get_prompt(agent=config)
-        memory = await self._get_memory()
-        if len(tools) > 0:
-            agent = initialize_agent(
-                tools,
-                llm,
-                agent=AgentType.OPENAI_FUNCTIONS,
-                agent_kwargs={
-                    "system_message": prompt,
-                    "extra_prompt_messages": [
-                        MessagesPlaceholder(variable_name="chat_history")
-                    ],
-                },
-                memory=memory,
-                return_intermediate_steps=True,
-                verbose=True,
+
+    async def get_agent(self):
+        if self.agent_data.type == AgentType.OPENAI_ASSISTANT:
+            from app.agents.openai import OpenAiAssistant
+
+            agent = OpenAiAssistant(
+                session_id=self.session_id,
+                enable_streaming=self.enable_streaming,
+                output_schema=self.output_schema,
+                callbacks=self.callbacks,
+                llm_data=self.llm_data,
+                agent_data=self.agent_data,
             )
-            return agent
+
+        elif self.agent_data.type == AgentType.LLM:
+            from app.agents.llm import LLMAgent
+
+            agent = LLMAgent(
+                session_id=self.session_id,
+                enable_streaming=self.enable_streaming,
+                output_schema=self.output_schema,
+                callbacks=self.callbacks,
+                llm_data=self.llm_data,
+                agent_data=self.agent_data,
+            )
+
         else:
-            prompt = (
-                f"{config.prompt or DEFAULT_PROMPT} \n %s"
-                % "Question: {input} \n History: \n {chat_history}"
+            from app.agents.langchain import LangchainAgent
+
+            agent = LangchainAgent(
+                session_id=self.session_id,
+                enable_streaming=self.enable_streaming,
+                output_schema=self.output_schema,
+                callbacks=self.callbacks,
+                llm_data=self.llm_data,
+                agent_data=self.agent_data,
             )
-            agent = LLMChain(
-                llm=llm,
-                memory=memory,
-                output_key="output",
-                verbose=True,
-                return_final_only=True,
-                prompt=PromptTemplate.from_template(prompt),
-            )
-        return agent
+
+        return await agent.get_agent()

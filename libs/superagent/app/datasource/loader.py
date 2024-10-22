@@ -5,16 +5,19 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
-from langchain.document_loaders import (
+from bs4 import BeautifulSoup as Soup
+from langchain.docstore.document import Document
+from langchain_community.document_loaders import (
+    AirbyteStripeLoader,
     GitLoader,
     PyPDFLoader,
+    RecursiveUrlLoader,
     TextLoader,
     UnstructuredMarkdownLoader,
+    UnstructuredWordDocumentLoader,
     WebBaseLoader,
     YoutubeLoader,
 )
-from langchain.document_loaders.airbyte import AirbyteStripeLoader
-from llama_index import download_loader
 from pyairtable import Api
 
 from prisma.models import Datasource
@@ -29,14 +32,18 @@ class DataLoader:
             return self.load_txt()
         elif self.datasource.type == "PDF":
             return self.load_pdf()
+        elif self.datasource.type == "PPTX":
+            return self.load_pptx()
+        elif self.datasource.type == "DOCX":
+            return self.load_docx()
+        elif self.datasource.type == "GOOGLE_DOC":
+            return self.load_google_doc()
         elif self.datasource.type == "Markdown":
             return self.load_markdown()
         elif self.datasource.type == "GITHUB_REPOSITORY":
             return self.load_github()
         elif self.datasource.type == "WEBPAGE":
             return self.load_webpage()
-        elif self.datasource.type == "NOTION":
-            return self.load_notion()
         elif self.datasource.type == "YOUTUBE":
             return self.load_youtube()
         elif self.datasource.type == "URL":
@@ -49,25 +56,70 @@ class DataLoader:
             raise ValueError(f"Unsupported datasource type: {self.datasource.type}")
 
     def load_txt(self):
-        file_response = requests.get(self.datasource.url).text
         with NamedTemporaryFile(suffix=".txt", delete=True) as temp_file:
+            if self.datasource.url:
+                file_response = requests.get(self.datasource.url).text
+            else:
+                file_response = self.datasource.content
             temp_file.write(file_response.encode())
             temp_file.flush()
             loader = TextLoader(file_path=temp_file.name)
             return loader.load_and_split()
 
     def load_pdf(self):
-        loader = PyPDFLoader(file_path=self.datasource.url)
+        if self.datasource.url:
+            loader = PyPDFLoader(file_path=self.datasource.url)
+        else:
+            with NamedTemporaryFile(suffix=".pdf", delete=True) as temp_file:
+                temp_file.write(self.datasource.content)
+                temp_file.flush()
+                loader = UnstructuredWordDocumentLoader(file_path=temp_file.name)
+                return loader.load_and_split()
         return loader.load_and_split()
 
+    def load_google_doc(self):
+        pass
+
+    def load_pptx(self):
+        from pptx import Presentation
+
+        with NamedTemporaryFile(suffix=".pptx", delete=True) as temp_file:
+            if self.datasource.url:
+                file_response = requests.get(self.datasource.url).content
+            else:
+                file_response = self.datasource.content
+            temp_file.write(file_response)
+            temp_file.flush()
+            presentation = Presentation(temp_file.name)
+            result = ""
+            for i, slide in enumerate(presentation.slides):
+                result += f"\n\nSlide #{i}: \n"
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        result += f"{shape.text}\n"
+            return [Document(page_content=result)]
+
+    def load_docx(self):
+        with NamedTemporaryFile(suffix=".docx", delete=True) as temp_file:
+            if self.datasource.url:
+                file_response = requests.get(self.datasource.url).content
+            else:
+                file_response = self.datasource.content
+            temp_file.write(file_response)
+            temp_file.flush()
+            loader = UnstructuredWordDocumentLoader(file_path=temp_file.name)
+            return loader.load_and_split()
+
     def load_markdown(self):
-        file_response = requests.get(self.datasource.url).text
-        if file_response:
-            with NamedTemporaryFile(suffix=".md", delete=True) as temp_file:
-                temp_file.write(file_response.encode())
-                temp_file.flush()
-                loader = UnstructuredMarkdownLoader(file_path=temp_file.name)
-                return loader.load()
+        with NamedTemporaryFile(suffix=".md", delete=True) as temp_file:
+            if self.datasource.url:
+                file_response = requests.get(self.datasource.url).text
+            else:
+                file_response = self.datasource.content
+            temp_file.write(file_response.encode())
+            temp_file.flush()
+            loader = UnstructuredMarkdownLoader(file_path=temp_file.name)
+            return loader.load()
 
     def load_github(self):
         parsed_url = urlparse(self.datasource.url)
@@ -85,17 +137,16 @@ class DataLoader:
             return loader.load_and_split()
 
     def load_webpage(self):
-        RemoteDepthReader = download_loader("RemoteDepthReader")
-        loader = RemoteDepthReader(depth=0)
-        return loader.load_langchain_documents(url=self.datasource.url)
-
-    def load_notion(self):
-        metadata = json.loads(self.datasource.metadata)
-        NotionPageReader = download_loader("NotionPageReader")
-        integration_token = metadata["integration_token"]
-        page_ids = metadata["page_ids"]
-        loader = NotionPageReader(integration_token=integration_token)
-        return loader.load_langchain_documents(page_ids=page_ids.split(","))
+        loader = RecursiveUrlLoader(
+            url=self.datasource.url,
+            max_depth=2,
+            extractor=lambda x: Soup(x, "html.parser").text,
+        )
+        chunks = loader.load_and_split()
+        for chunk in chunks:
+            if "language" in chunk.metadata:
+                del chunk.metadata["language"]
+        return chunks
 
     def load_youtube(self):
         video_id = self.datasource.url.split("youtube.com/watch?v=")[-1]

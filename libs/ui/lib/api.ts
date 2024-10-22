@@ -5,24 +5,36 @@ export class Api {
     this.apiKey = apiKey
   }
 
-  async fetchFromApi(endpoint: string, options: RequestInit = {}) {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPERAGENT_API_URL}${endpoint}`,
-      {
-        ...options,
-        headers: {
-          ...options.headers,
-          "Content-Type": "application/json",
-          authorization: `Bearer ${this.apiKey}`,
-        },
-      }
+  async fetchFromApi(
+    endpoint: string,
+    options: RequestInit = {},
+    searchParams: Record<string, any> = {}
+  ) {
+    const url = new URL(
+      `${process.env.NEXT_PUBLIC_SUPERAGENT_API_URL}${endpoint}`
     )
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+    Object.entries(searchParams).forEach(([key, value]) => {
+      url.searchParams.append(key, value)
+    })
+
+    const response = await fetch(url.toString(), {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        authorization: `Bearer ${this.apiKey}`,
+        ...options.headers,
+      },
+    })
 
     return await response.json()
+  }
+
+  async indentifyUser(payload: any) {
+    return this.fetchFromApi("/api-users/identify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
   }
 
   async createAgent(payload: any) {
@@ -46,8 +58,33 @@ export class Api {
     })
   }
 
-  async createApiKey() {
-    return this.fetchFromApi("/api-users", { method: "POST" })
+  async createApiUser(payload: any) {
+    return this.fetchFromApi("/api-users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async createApiKey(payload: any) {
+    return this.fetchFromApi("/api-keys", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async getApiKeys() {
+    return this.fetchFromApi("/api-keys")
+  }
+
+  async updateApiKey(id: string, payload: any) {
+    return this.fetchFromApi(`/api-keys/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async deleteApiKey(id: string) {
+    return this.fetchFromApi(`/api-keys/${id}`, { method: "DELETE" })
   }
 
   async createDatasource(payload: any) {
@@ -78,6 +115,12 @@ export class Api {
     })
   }
 
+  async deleteAgentLLM(agentId: string, llmId: string) {
+    return this.fetchFromApi(`/agents/${agentId}/llms/${llmId}`, {
+      method: "DELETE",
+    })
+  }
+
   async deleteAgentById(id: string) {
     return this.fetchFromApi(`/agents/${id}`, { method: "DELETE" })
   }
@@ -102,8 +145,10 @@ export class Api {
     return this.fetchFromApi(`/tools/${id}`, { method: "DELETE" })
   }
 
-  async getAgents() {
-    return this.fetchFromApi("/agents")
+  async getAgents(
+    searchParams: { take?: number; skip?: number } = { skip: 0, take: 300 }
+  ) {
+    return this.fetchFromApi("/agents", {}, searchParams)
   }
 
   async getAgentById(id: string) {
@@ -114,16 +159,30 @@ export class Api {
     return this.fetchFromApi(`/agents/${id}/runs`)
   }
 
-  async getDatasources() {
-    return this.fetchFromApi(`/datasources`)
+  async getDatasources(
+    searchParams: { take?: number; skip?: number } = { skip: 0, take: 50 }
+  ) {
+    return this.fetchFromApi(`/datasources`, {}, searchParams)
   }
 
   async getLLMs() {
     return this.fetchFromApi(`/llms`)
   }
 
-  async getTools() {
-    return this.fetchFromApi("/tools")
+  async getTools(
+    searchParams: { take?: number; skip?: number } = { skip: 0, take: 50 }
+  ) {
+    return this.fetchFromApi("/tools", {}, searchParams)
+  }
+
+  async getRuns(searchParams?: {
+    workflow_id?: string
+    agent_id?: string
+    limit?: number
+    from_page?: number
+    to_page?: number
+  }) {
+    return this.fetchFromApi("/runs", {}, searchParams)
   }
 
   async patchAgent(id: string, payload: any) {
@@ -151,6 +210,99 @@ export class Api {
     return this.fetchFromApi(`/tools/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
+    })
+  }
+
+  async getWorkflows(
+    searchParams: { take?: number; skip?: number } = { skip: 0, take: 50 }
+  ) {
+    return this.fetchFromApi("/workflows", {}, searchParams)
+  }
+
+  async getWorkflowById(id: string) {
+    return this.fetchFromApi(`/workflows/${id}`)
+  }
+
+  async createWorkflow(payload: any) {
+    return this.fetchFromApi("/workflows", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async generateWorkflow(workflowId: string, payload: any) {
+    // TODO: update fetchFromApi and use it
+    return fetch(
+      `${process.env.NEXT_PUBLIC_SUPERAGENT_API_URL}/workflows/${workflowId}/config`,
+      {
+        method: "POST",
+        body: payload,
+        headers: {
+          "Content-Type": "application/x-yaml",
+          authorization: `Bearer ${this.apiKey}`,
+        },
+      }
+    )
+  }
+
+  async getWorkflowSteps(id: string) {
+    return this.fetchFromApi(`/workflows/${id}/steps`)
+  }
+
+  async createWorkflowStep(workflowId: string, payload: any) {
+    return this.fetchFromApi(`/workflows/${workflowId}/steps`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async patchWorkflowStep(workflowId: string, stepId: string, payload: any) {
+    return this.fetchFromApi(`/workflows/${workflowId}/steps/${stepId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async deleteWorkflowStep(workflowId: string, stepId: string) {
+    return this.fetchFromApi(`/workflows/${workflowId}/steps/${stepId}`, {
+      method: "DELETE",
+    })
+  }
+
+  async patchWorkflow(workflowId: string, payload: any) {
+    return this.fetchFromApi(`/workflows/${workflowId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async deleteWorkflow(workflowId: string) {
+    return this.fetchFromApi(`/workflows/${workflowId}`, {
+      method: "DELETE",
+    })
+  }
+
+  async getVectorDbs() {
+    return this.fetchFromApi(`/vector-dbs`)
+  }
+
+  async createVectorDb(payload: any) {
+    return this.fetchFromApi("/vector-db", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async patchVectorDb(id: string, payload: any) {
+    return this.fetchFromApi(`/vector-dbs/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async deleteVectorDb(id: string) {
+    return this.fetchFromApi(`/vector-dbs/${id}`, {
+      method: "DELETE",
     })
   }
 }

@@ -50,3 +50,9 @@ next-env.d.ts
 
 # supabase
 v2.code-workspace
+
+# replit
+/.pythonlibs
+
+# service keys
+google_cloud_service_key.json

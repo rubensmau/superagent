@@ -1,6 +1,118 @@
 instances:
   - url: https://superagent.docs.buildwithfern.com
     custom-domain: docs.superagent.sh
+tabs:
+  api:
+    display-name: API Reference
+    icon: "fa-solid fa-code"
+  overview:
+    display-name: Overview
+    icon: "fa-solid fa-earth-americas"
+  templates:
+    display-name: Templates
+    icon: "fa-solid fa-cube"
+navigation:
+  - tab: overview
+    layout:
+      - section: Overview
+        contents:
+          - page: Introduction
+            path: ./mdx/intro.mdx
+          - page: Concepts
+            path: ./mdx/concepts.mdx
+          - page: Platform
+            path: ./mdx/platform.mdx
+      - section: Getting Started
+        contents:
+          - page: Install SDKs
+            path: ./mdx/sdk/installation.mdx
+          - page: Basic example
+            path: ./mdx/sdk/basic_example.mdx
+          - page: Configure Language Model
+            path: ./mdx/sdk/agent_llm_params.mdx  
+          - page: Chat with datasources
+            path: ./mdx/sdk/chat_with_datasources.mdx
+          - page: Chat with tools
+            path: ./mdx/sdk/chat_with_tools.mdx
+          - page: Structured outputs
+            path: ./mdx/sdk/structured_outputs.mdx
+          - page: Human hand-off
+            path: ./mdx/sdk/human_handoff.mdx
+          - page: Custom tools
+            path: ./mdx/sdk/local_tools.mdx
+          - page: Assistant workflows
+            path: ./mdx/sdk/workflows.mdx
+          - page: Configuring Vector Database
+            path: ./mdx/sdk/configure_vector_database.mdx
+      - section: SAML
+        contents:
+          - page: Intro
+            path: ./mdx/saml/intro.mdx
+          - page: Structured Outputs
+            path: ./mdx/saml/structured_outputs.mdx
+      - section: Installation 
+        contents:
+          - page: Docker Compose
+            path: ./mdx/deploy/docker-compose.mdx     
+          - page: Render
+            path: ./mdx/deploy/render.mdx
+          - page: Replit
+            path: ./mdx/deploy/replit.mdx
+          - page: Running locally
+            path: ./mdx/deploy/local.mdx
+      - section: RAG & Retrieval
+        contents:
+          - page: Super-Rag with SAML
+            path: ./mdx/rag/super-rag-saml.mdx  
+          - page: Super-Rag with SDK
+            path: ./mdx/rag/super-rag-sdk.mdx  
+      - section: Logging
+        contents:
+          - page: AgentOps
+            path: ./mdx/logging/agentops.mdx
+          - page: Langfuse
+            path: ./mdx/logging/langfuse.mdx
+      - section: Vector Stores
+        contents:
+          - page: Weaviate
+            path: ./mdx/vector-stores/weaviate.mdx
+          - page: Supabase
+            path: ./mdx/vector-stores/supabase.mdx
+          - page: Qdrant
+            path: ./mdx/vector-stores/qdrant.mdx
+          - page: Pinecone
+            path: ./mdx/vector-stores/pinecone.mdx
+          - page: Datastax Astra
+            path: ./mdx/vector-stores/astra.mdx
+      - section: Memory 
+        contents: 
+          - page: Motorhead
+            path: ./mdx/memory/motorhead.mdx
+      - section: Dependencies
+        contents:
+          - page: Supabase
+            path: ./mdx/dependencies/supabase.mdx
+          
+      
+  - tab: templates
+    layout:
+      - section: Assistants
+        contents:
+          - page: Stock Assistant
+            path: ./mdx/apps/stock.mdx
+          - page: Chat & image generation 
+            path: ./mdx/apps/image-gen.mdx 
+  - tab: api
+    layout:
+      - section: Introduction
+        contents:
+          - page: Authentication
+            path: ./mdx/authentication.mdx
+      - api: API Reference
+        api-name: prod 
+        snippets: 
+          python: superagent-py
+          typescript: superagentai-js
 colors:
   accentPrimary: "#FDC537"
   background: "#0F1117"
@@ -8,14 +120,6 @@ logo:
   dark: ./assets/logo-dark.png
   height: 24
   href: https://www.superagent.sh/
-versions: 
-  - display-name: v0.1
-    path: ./versions/prod.yml
-    slug: v0.1
-  - display-name: v0
-    path: ./versions/legacy.yml
-    slug: v0
-    availability: deprecated
 favicon: ./assets/favicon.png
 title: Superagent | Docs
 navbar-links:
@@ -23,8 +127,8 @@ navbar-links:
     text: Discord
     url: https://discord.com/invite/mhmJUTjW4b
   - type: secondary
-    text: Github
+    text: GitHub
     url: https://github.com/homanp/superagent
   - type: primary
     text: Login
-    url: https://app.superagent.sh/login
+    url: https://beta.superagent.sh/

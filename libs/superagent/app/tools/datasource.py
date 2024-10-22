@@ -4,15 +4,16 @@ import pandas as pd
 
 from io import StringIO
 from decouple import config
-from langchain.tools import BaseTool
+from tempfile import NamedTemporaryFile
+from langchain_community.tools import BaseTool
 from llama import Context, LLMEngine, Type
-from app.vectorstores.pinecone import PineconeVectorStore
+from app.vectorstores.base import VectorStoreMain
 from app.datasource.loader import DataLoader
 from prisma.models import Datasource
 
 from langchain.agents.agent_types import AgentType
-from langchain.agents import create_pandas_dataframe_agent
-from langchain.chat_models.openai import ChatOpenAI
+from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
+from langchain_openai import ChatOpenAI
 
 
 class DatasourceFinetuneTool(BaseTool):
@@ -73,8 +74,12 @@ class DatasourceTool(BaseTool):
         question: str,
     ) -> str:
         """Use the tool."""
-        pinecone = PineconeVectorStore()
-        result = pinecone.query_documents(
+        vector_store = VectorStoreMain(
+            options=self.metadata["options"],
+            vector_db_provider=self.metadata["provider"],
+            embeddings_model_provider=self.metadata["embeddings_model_provider"],
+        )
+        result = vector_store.query_documents(
             prompt=question,
             datasource_id=self.metadata["datasource_id"],
             query_type=self.metadata["query_type"],
@@ -87,8 +92,12 @@ class DatasourceTool(BaseTool):
         question: str,
     ) -> str:
         """Use the tool asynchronously."""
-        pinecone = PineconeVectorStore()
-        result = pinecone.query_documents(
+        vector_store = VectorStoreMain(
+            options=self.metadata["options"],
+            vector_db_provider=self.metadata["provider"],
+            embeddings_model_provider=self.metadata["embeddings_model_provider"],
+        )
+        result = vector_store.query_documents(
             prompt=question,
             datasource_id=self.metadata["datasource_id"],
             query_type=self.metadata["query_type"],
@@ -102,6 +111,26 @@ class StructuredDatasourceTool(BaseTool):
     description = "useful for when need answer questions"
     return_direct = False
 
+    def _load_xlsx_data(self, datasource: Datasource):
+        with NamedTemporaryFile(suffix=".xlsx", delete=True) as temp_file:
+            if datasource.url:
+                response = requests.get(datasource.url)
+                temp_file.write(response.content)
+            else:
+                temp_file.write(datasource.content)
+            temp_file.flush()
+            df = pd.read_excel(temp_file.name, engine="openpyxl")
+        return df
+
+    def _load_csv_data(self, datasource: Datasource):
+        if datasource.url:
+            response = requests.get(datasource.url)
+            file_content = StringIO(response.text)
+        else:
+            file_content = StringIO(datasource.content)
+        df = pd.read_csv(file_content)
+        return df
+
     def _run(
         self,
         question: str,
@@ -109,16 +138,17 @@ class StructuredDatasourceTool(BaseTool):
         """Use the tool."""
         datasource: Datasource = self.metadata["datasource"]
         if datasource.type == "CSV":
-            url = datasource.url
-            response = requests.get(url)
-            file_content = StringIO(response.text)
-            df = pd.read_csv(file_content)
+            df = self._load_csv_data(datasource)
+        elif datasource.type == "XLSX":
+            df = self._load_xlsx_data(datasource)
         else:
             data = DataLoader(datasource=datasource).load()
             df = pd.DataFrame(data)
         agent = create_pandas_dataframe_agent(
             ChatOpenAI(
-                temperature=0, model="gpt-4", openai_api_key=config("OPENAI_API_KEY")
+                temperature=0,
+                model="gpt-4-0613",
+                openai_api_key=config("OPENAI_API_KEY"),
             ),
             df,
             verbose=True,
@@ -134,16 +164,17 @@ class StructuredDatasourceTool(BaseTool):
         """Use the tool asynchronously."""
         datasource: Datasource = self.metadata["datasource"]
         if datasource.type == "CSV":
-            url = datasource.url
-            response = requests.get(url)
-            file_content = StringIO(response.text)
-            df = pd.read_csv(file_content)
+            df = self._load_csv_data(datasource)
+        elif datasource.type == "XLSX":
+            df = self._load_xlsx_data(datasource)
         else:
             data = DataLoader(datasource=datasource).load()
             df = pd.DataFrame(data)
         agent = create_pandas_dataframe_agent(
             ChatOpenAI(
-                temperature=0, model="gpt-4", openai_api_key=config("OPENAI_API_KEY")
+                temperature=0,
+                model="gpt-4-0613",
+                openai_api_key=config("OPENAI_API_KEY"),
             ),
             df,
             verbose=True,

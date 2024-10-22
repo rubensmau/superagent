@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { RxPaperPlane, RxPlus } from "react-icons/rx"
+import { RxArrowUp, RxPlus, RxStop } from "react-icons/rx"
 import Textarea from "react-textarea-autosize"
 import { v4 as uuid } from "uuid"
 
@@ -13,12 +13,14 @@ export interface PromptProps {
   onSubmit: (value: string) => Promise<void>
   isLoading: boolean
   onCreateSession: (value: string) => Promise<void>
+  onStop: () => void
 }
 
 export default function PromptFrom({
   onSubmit,
   isLoading,
   onCreateSession,
+  onStop,
 }: PromptProps) {
   const [input, setInput] = React.useState<string>()
   const { formRef, onKeyDown } = useEnterSubmit()
@@ -42,14 +44,14 @@ export default function PromptFrom({
       }}
       ref={formRef}
     >
-      <div className="bg-background relative flex max-h-60 w-full grow flex-col overflow-hidden px-8 sm:rounded-md sm:border sm:px-12">
+      <div className="relative flex max-h-60 w-full grow flex-col overflow-hidden bg-background px-8 sm:rounded-2xl sm:border sm:px-12">
         <button
           onClick={() => {
             onCreateSession(uuid())
           }}
           className={cn(
             buttonVariants({ size: "sm", variant: "outline" }),
-            "bg-background absolute left-0 top-4 h-8 w-8 rounded-full p-0 sm:left-4"
+            "absolute left-0 top-4 h-8 w-8 rounded-full bg-background p-0 sm:left-4"
           )}
         >
           <RxPlus />
@@ -67,15 +69,29 @@ export default function PromptFrom({
           className="min-h-[60px] w-full resize-none bg-transparent px-4 py-[1.3rem] focus-within:outline-none sm:text-sm"
         />
         <div className="absolute right-0 top-2.5 sm:right-4">
-          <Button
-            type="submit"
-            size="icon"
-            variant="secondary"
-            disabled={isLoading || input === ""}
-          >
-            <RxPaperPlane />
-            <span className="sr-only">Send message</span>
-          </Button>
+          {isLoading ? (
+            <Button
+              onClick={onStop}
+              className={cn(
+                buttonVariants({ size: "sm", variant: "secondary" }),
+                "mt-1 h-8 w-8 rounded-md p-0"
+              )}
+            >
+              <RxStop size="18px" />
+              <span className="sr-only">Send message</span>
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              className={cn(
+                buttonVariants({ size: "sm", variant: "secondary" }),
+                "mt-1 h-8 w-8 rounded-md p-0"
+              )}
+            >
+              <RxArrowUp size="18px" />
+              <span className="sr-only">Send message</span>
+            </Button>
+          )}
         </div>
       </div>
     </form>

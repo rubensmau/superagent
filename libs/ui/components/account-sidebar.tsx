@@ -7,7 +7,9 @@ import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
 interface SettingsSidebarProps extends React.HTMLAttributes<HTMLElement> {
+  profile: any
   items: {
+    id: string
     href: string
     title: string
     disabled?: boolean
@@ -15,6 +17,7 @@ interface SettingsSidebarProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 export function SettingsSidebar({
+  profile,
   className,
   items,
   ...props
